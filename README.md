@@ -40,3 +40,4 @@ for python
 library make envirment first then install requirments.txt install
 using this command- pip install -r requirements.txt
 and also run this cmd - python -m spacy download en_core_web_sm
+uvicorn main:app --reload --port 8000
