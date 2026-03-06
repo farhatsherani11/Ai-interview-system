@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -15,48 +16,49 @@ else:
     print(f"❌ Could not find .env.local at: {env_file}")
 
 # 3. Get the Key
-api_key = os.getenv("GEMINI_API_KEY") 
+api_key = os.getenv("GEMINI_API_KEY")
 
 if api_key:
     genai.configure(api_key=api_key)
     print(f"🔑 API Key found: {api_key[:5]}...{api_key[-4:]}")
-    
-    # --- FIX: INITIALIZE THE MODEL HERE ---
     model = genai.GenerativeModel('models/gemini-2.5-flash')
 else:
     print("⚠️ API Key is still MISSING!")
     model = None
 
 
-
 def generate_feedback(resume_text, jd_text):
     if not model:
-        return "Error: AI Model not initialized. Check API Key."
+        return {"error": "Gemini API key is missing or model failed to load."}
 
     prompt = f"""
-    You are an expert ATS and HR evaluator.
-    Analyze the resume against the job description.
+You are an expert ATS evaluator. Analyze the resume against the job description.
+Return ONLY a valid JSON object with this exact structure (no markdown, no extra text):
+{{
+  "overall_match": "High/Medium/Low",
+  "strengths": ["strength1", "strength2"],
+  "grammar_fixes": ["fix1", "fix2"],
+  "bullet_rewrites": [
+    {{"original": "original bullet text", "improved": "improved bullet text"}}
+  ],
+  "strategic_advice": "Overall advice as a single paragraph"
+}}
 
-    Job Description:
-    {jd_text}
+Job Description:
+{jd_text}
 
-    Resume:
-    {resume_text}
-
-    Provide:
-    1. Section-wise feedback (Skills, Experience, Projects)
-    2. Grammar corrections
-    3. Missing skills
-    4. Improved bullet rewrites
-    5. Overall improvement report with actionable suggestions
-
-    Be structured and professional.
-    """
+Resume:
+{resume_text}
+"""
 
     try:
-        response = model.generate_content(prompt)
-        return response.text
+        response = model.generate_content(
+            prompt,
+            generation_config={"response_mime_type": "application/json"}
+        )
+        return json.loads(response.text)
+
+    except json.JSONDecodeError:
+        return {"error": "Gemini returned invalid JSON.", "raw": response.text}
     except Exception as e:
-        return f"Error during generation: {str(e)}"
-    
-    
+        return {"error": f"Generation failed: {str(e)}"}
